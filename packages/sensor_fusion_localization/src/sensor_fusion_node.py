@@ -148,7 +148,8 @@ class SensorFusionNode(DTROS):
                         tf.ExtrapolationException)
         self.poses = []
         self.translations = []
-        self.landmarks = []       
+        self.landmarks = []
+        signs = []     
         try:
             for i in msg_sensor.data:
                 targetFrame = "at_" + str(i) + "_camera_rgb_link"
@@ -163,6 +164,7 @@ class SensorFusionNode(DTROS):
                 self.poses.append(np.array([translation[2] + translation1[0], -translation[0] + translation1[1], euler1[2]-euler[1]]))
                 self.translations.append(np.array([-translation[2], translation[0], euler[1]]))
                 self.landmarks.append(np.array([translation1[0], translation1[1], euler1[2]]))
+                signs.append(i)
                 print(i)
                 print(euler)
                 print(translation)
@@ -171,6 +173,22 @@ class SensorFusionNode(DTROS):
                               
         except tf_exceptions:
             return
+
+        # detect the stop sign
+        for i in range(0, len(sign)):
+        	# check if the sign we see is a stop sign
+        	if signs[i] == 24 or signs[i] == 25 or signs[i] == 26 or signs[i] ==31 or signs[i] == 32 or signs[i] == 33:
+        		x_dif = self.translations[i][0] - self.landmarks[i][0]
+        		y_dif = self.translations[j][1] - self.landmarks[j][1]
+        		distance = math.sqrt(x_dif * x_dif + y_dif * y_dif)
+        		angle_dif = self.translations[j][2] - self.landmarks[j][2]
+
+        		# check if we are close enough to stop sign 
+        		if distance <= 0.2 and (angle_dif < 0.2 or angle_dif > - 0.2):
+                      # to do (try to stop then go right, then go left, then go left again) 
+
+
+
         if self.FUSION_TYPE == "EKF":
             if self.kalman is None:
                 self.initTags.extend(poses)
