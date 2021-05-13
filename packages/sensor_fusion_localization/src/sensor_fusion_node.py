@@ -175,13 +175,13 @@ class SensorFusionNode(DTROS):
             return
 
         # detect the stop sign
-        for i in range(0, len(sign)):
+        for i in range(0, len(signs)):
         	# check if the sign we see is a stop sign
         	if signs[i] == 24 or signs[i] == 25 or signs[i] == 26 or signs[i] ==31 or signs[i] == 32 or signs[i] == 33:
         		x_dif = self.translations[i][0] - self.landmarks[i][0]
         		y_dif = self.translations[j][1] - self.landmarks[j][1]
         		distance = math.sqrt(x_dif * x_dif + y_dif * y_dif)
-        		angle_dif = self.translations[j][2] - self.landmarks[j][2]
+        		angle_dif = self.translations[j][2] % (2 * np.pi) - self.landmarks[j][2] % (2 * np.pi)
 
         		# check if we are close enough to stop sign 
         		if distance <= 0.2 and (angle_dif < 0.2 or angle_dif > - 0.2):
