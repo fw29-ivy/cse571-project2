@@ -74,7 +74,8 @@ class ATPoseNode(DTROS):
             camera_topic,
             CompressedImage,
             self.detectATPose,
-            queue_size=1
+            queue_size=1,
+            buff_size = 2**24
         )
 
         camera_info_topic = f'/{self.veh}/camera_node/camera_info'
@@ -135,20 +136,10 @@ class ATPoseNode(DTROS):
         br.sendTransform(ts)
 
     def _broadcast_detected_tag(self, image_msg, tag_id, tag):
-        # inverse the rotation and tranformation comming out of the AT detector.
-        # The AP detector's output is the camera frame relative to the TAG
-        # According to: https://duckietown.slack.com/archives/C6ZHPV212/p1619876209086300?thread_ts=1619751267.084600&cid=C6ZHPV212
-        # While the transformation below needs TAG relative to camera
-        # Therefore we need to reverse it first.
-        pose_R = np.identity(4)
-        pose_R[:3, :3] = tag.pose_R
-        inv_pose_R = np.transpose(pose_R)
-        pose_t = np.ones((4, 1)) 
-        pose_t[:3, :] = tag.pose_t
-        inv_pose_t = -np.matmul(inv_pose_R, pose_t)
-        out_q = quaternion_from_matrix(inv_pose_R)
-        out_t = inv_pose_t[:3, :]
+        pose = np.identity(4)
+        pose[0:3, 0:3] = tag.pose_R
 
+        q_tag = quaternion_from_matrix(pose)
         tag_frame_id = 'april_tag_{}'.format(tag_id)
         tag_cam_frame_id = 'april_tag_cam_{}'.format(tag_id)
         camera_rgb_link_frame_id = 'at_{}_camera_rgb_link'.format(tag_id)
@@ -159,7 +150,7 @@ class ATPoseNode(DTROS):
         self._broadcast_tf(
             parent_frame_id=tag_frame_id,
             child_frame_id=tag_cam_frame_id,
-            euler_angles=(-90 * math.pi / 180, 0, -90 * math.pi / 180)
+            euler_angles=(-90 * math.pi / 180, 0, 90 * math.pi / 180)
         )
 
         # ATag cam to camera_rgb_link (again this is internal cam frame)
@@ -167,8 +158,8 @@ class ATPoseNode(DTROS):
             parent_frame_id=tag_cam_frame_id,
             child_frame_id=camera_rgb_link_frame_id,
             stamp=image_msg.header.stamp,
-            translations=out_t,
-            quarternion=out_q
+            translations=tag.pose_t,
+            quarternion=q_tag
         )
 
         # camera_rgb_link to camera_link (internal cam frame to physical cam frame)
@@ -176,7 +167,7 @@ class ATPoseNode(DTROS):
             parent_frame_id=camera_rgb_link_frame_id,
             child_frame_id=camera_link_frame_id,
             stamp=image_msg.header.stamp,
-            euler_angles=(0, -90 * math.pi / 180, 90 * math.pi / 180)
+            euler_angles=(0, 90 * math.pi / 180, -90 * math.pi / 180)
         )
 
         # camera_link to base_link of robot
@@ -214,10 +205,11 @@ class ATPoseNode(DTROS):
         detected_tags = self.at_detector.detect(gray_img, estimate_tag_pose=True, camera_params=camera_params, tag_size=0.065)
         detected_tag_ids = list(map(lambda x: fetch_tag_id(x), detected_tags))
         array_for_pub = Int32MultiArray(data=detected_tag_ids)
-        self.tag_pub.publish(array_for_pub)
+        #self.tag_pub.publish(array_for_pub)
         for tag_id, tag in zip(detected_tag_ids, detected_tags):
-            print('detected {}: ({}, {})'.format(tag_id, image_msg.header.stamp.to_time(), rospy.Time.now().to_time()))
+            #print('detected {}: ({}, {})'.format(tag_id, image_msg.header.stamp.to_time(), rospy.Time.now().to_time()))
             self._broadcast_detected_tag(image_msg, tag_id, tag)
+        self.tag_pub.publish(array_for_pub)
 
 
 if __name__ == "__main__":

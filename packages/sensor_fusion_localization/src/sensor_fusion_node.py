@@ -5,7 +5,8 @@ import math
 import rospy
 import tf
 
-from duckietown_msgs.msg import Twist2DStamped, Pose2DStamped
+from duckietown_msgs.msg import Twist2DStamped, LanePose, Pose2DStamped, BoolStamped
+from sensor_msgs.msg import Joy
 from std_msgs.msg import Int32MultiArray
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped
@@ -54,7 +55,8 @@ class SensorFusionNode(DTROS):
         # Initialize the DTROS parent class
         super(SensorFusionNode, self).__init__(
             node_name=node_name,
-            node_type=NodeType.LOCALIZATION
+            #node_type=NodeType.LOCALIZATION
+            node_type=NodeType.CONTROL
         )
 
         # Get the vehicle name
@@ -76,6 +78,20 @@ class SensorFusionNode(DTROS):
             "~path",
             Path,
             queue_size=1
+        )
+        
+        self.pub_joy_override = rospy.Publisher(
+            str("/" + self.veh_name + "/joy_mapper_node/joystick_override"),
+            BoolStamped,
+            queue_size=1,
+            dt_topic_type=TopicType.CONTROL
+        )
+        
+        self.pub_car_cmd = rospy.Publisher(
+            str("/" + self.veh_name + "/joy_mapper_node/car_cmd"),
+            Twist2DStamped,
+            queue_size=1,
+            dt_topic_type=TopicType.CONTROL
         )
         
         self.pub_pose2 = rospy.Publisher(
@@ -106,6 +122,7 @@ class SensorFusionNode(DTROS):
             self.sensor_fusion_callback,
             queue_size=1
         )
+        
 
         self.llv = 0
         self.llt = 0
@@ -130,13 +147,24 @@ class SensorFusionNode(DTROS):
         self.weights = np.ones(self.N) / self.N
         self.mean2 = np.mean(self.particles, axis=0)
         self.trajectory = Path()
-        self.poses = []
+        #self.poses = []
         self.translations = []
-        self.landmarks = []    
+        self.landmarks = []
+        self.pose_msg = LanePose()
+        self.stopping = False
+        self.turnLeft = False
+        self.turnRight = False
+        self.leftMove = False
+        self.rightMove = False
+        self.finalTurn = False
 	
         # ---
         self.log("Initialized.")
 
+    def joy_cb(self, joy_msg):
+        print(joy_msg)
+    
+    
     def sensor_fusion_callback(self, msg_sensor):
         """
         This function should handle the sensor fusion. It will fire whenever
@@ -146,7 +174,7 @@ class SensorFusionNode(DTROS):
         tf_exceptions = (tf.LookupException,
                         tf.ConnectivityException,
                         tf.ExtrapolationException)
-        self.poses = []
+        poses = []
         self.translations = []
         self.landmarks = []
         signs = []     
@@ -160,35 +188,141 @@ class SensorFusionNode(DTROS):
                 (translation1, rot1) = self.t.lookupTransform(sourceFrame1, targetFrame1, latest)
                 euler = euler_from_quaternion([rot[0], rot[1], rot[2], rot[3]])
                 euler1 = euler_from_quaternion([rot1[0], rot1[1], rot1[2], rot1[3]])
+                tmpx = translation[2]*np.cos(-euler1[2]) + translation[0]*np.sin(-euler1[2])
+                tmpy = -translation[2]*np.sin(-euler1[2]) + translation[0]*np.cos(-euler1[2])
           
-                self.poses.append(np.array([translation[2] + translation1[0], -translation[0] + translation1[1], euler1[2]-euler[1]]))
-                self.translations.append(np.array([-translation[2], translation[0], euler[1]]))
+                poses.append(np.array([tmpx + translation1[0], tmpy + translation1[1], euler1[2] + euler[1]]))
+                self.translations.append(np.array([tmpx, tmpy, euler[1]]))
                 self.landmarks.append(np.array([translation1[0], translation1[1], euler1[2]]))
                 signs.append(i)
-                print(i)
-                print(euler)
+                """print(i)
                 print(translation)
+                print(tmpx)
+                print(tmpy)
                 print(translation1)
-                print("-----------------------------------")
+                print("-----------------------------------")"""
                               
         except tf_exceptions:
             return
+        if not self.stopping:
+            for i in range(0, len(signs)):
+                # check if the sign we see is a stop sign
+                if signs[i] == 24 or signs[i] == 25 or signs[i] == 26 or signs[i] ==31 or signs[i] == 32 or signs[i] == 33:
+                    x_dif = self.translations[i][0]
+                    y_dif = self.translations[i][1]
+                    distance = math.sqrt(x_dif * x_dif + y_dif * y_dif)
+                    angle_dif = self.translations[i][2] % (2 * np.pi)
 
-        # detect the stop sign
-        for i in range(0, len(signs)):
-        	# check if the sign we see is a stop sign
-        	if signs[i] == 24 or signs[i] == 25 or signs[i] == 26 or signs[i] ==31 or signs[i] == 32 or signs[i] == 33:
-        		x_dif = self.translations[i][0] - self.landmarks[i][0]
-        		y_dif = self.translations[j][1] - self.landmarks[j][1]
-        		distance = math.sqrt(x_dif * x_dif + y_dif * y_dif)
-        		angle_dif = self.translations[j][2] % (2 * np.pi) - self.landmarks[j][2] % (2 * np.pi)
-
-        		# check if we are close enough to stop sign 
-        		if distance <= 0.2 and (angle_dif < 0.2 or angle_dif > - 0.2):
-                      # to do (try to stop then go right, then go left, then go left again) 
-
-
-
+                    # check if we are close enough to stop sign 
+                    #if distance <= 0.2 and (angle_dif < 0.2 or angle_dif > - 0.2):
+                    if distance <= 0.2:
+                        # to do (try to stop then go right, then go left, then go left again) 
+                        #print(distance)
+                        #print(angle_dif)
+                        #print("------------------------------------")
+                        self.stopping = True
+                        self.turnLeft = True
+                    
+                        # stop lane following, set override to True
+                        override_msg = BoolStamped()
+                        #override_msg.header.stamp = joy_msg.header.stamp
+                        override_msg.data = True
+                        #self.log('override_msg = False')
+                        self.pub_joy_override.publish(override_msg)
+                        
+                        car_control_msg = Twist2DStamped()
+                        car_control_msg.v = 0
+                        car_control_msg.omega = 0
+                        self.pub_car_cmd.publish(car_control_msg)
+                    
+        if self.stopping:
+            if self.turnLeft:
+                car_control_msg = Twist2DStamped()
+                car_control_msg.v = 0
+                car_control_msg.omega = 0.2
+                self.pub_car_cmd.publish(car_control_msg)
+                for i in range(0, len(signs)):
+                    if signs[i] == 65:
+                        angle_dif = self.translations[i][2] % (2 * np.pi)
+                        if np.abs(angle_dif) < 0.35:
+                            self.turnLeft = False
+                            self.leftMove = True
+                            car_control_msg = Twist2DStamped()
+                            car_control_msg.v = 0
+                            car_control_msg.omega = 0
+                            self.pub_car_cmd.publish(car_control_msg)
+            
+            if self.leftMove:
+                car_control_msg = Twist2DStamped()
+                car_control_msg.v = 0.2
+                car_control_msg.omega = 0
+                self.pub_car_cmd.publish(car_control_msg)
+                for i in range(0, len(signs)):
+                    if signs[i] == 65:
+                        x_dif = self.translations[i][0]
+                        y_dif = self.translations[i][1]
+                        distance = math.sqrt(x_dif * x_dif + y_dif * y_dif)
+                        if distance < 0.2:
+                            self.leftMove = False
+                            self.turnRight = True
+                            car_control_msg = Twist2DStamped()
+                            car_control_msg.v = 0
+                            car_control_msg.omega = 0
+                            self.pub_car_cmd.publish(car_control_msg)
+                           
+            if self.turnRight:
+                car_control_msg = Twist2DStamped()
+                car_control_msg.v = 0
+                car_control_msg.omega = -0.2
+                self.pub_car_cmd.publish(car_control_msg)
+                for i in range(0, len(signs)):
+                    if signs[i] == 57:
+                        angle_dif = self.translations[i][2] % (2 * np.pi)
+                        if np.abs(angle_dif) < 0.35:
+                            self.turnRight = False
+                            self.rightMove = True
+                            car_control_msg = Twist2DStamped()
+                            car_control_msg.v = 0
+                            car_control_msg.omega = 0
+                            self.pub_car_cmd.publish(car_control_msg)
+                            
+            if self.rightMove:
+                car_control_msg = Twist2DStamped()
+                car_control_msg.v = 0.2
+                car_control_msg.omega = 0
+                self.pub_car_cmd.publish(car_control_msg)
+                for i in range(0, len(signs)):
+                    if signs[i] == 57:
+                        x_dif = self.translations[i][0]
+                        y_dif = self.translations[i][1]
+                        distance = math.sqrt(x_dif * x_dif + y_dif * y_dif)
+                        if distance < 0.3:
+                            self.rightMove = False
+                            self.finalTurn = True
+                            car_control_msg = Twist2DStamped()
+                            car_control_msg.v = 0
+                            car_control_msg.omega = 0
+                            self.pub_car_cmd.publish(car_control_msg)
+                            
+            if self.finalTurn:
+                car_control_msg = Twist2DStamped()
+                car_control_msg.v = 0
+                car_control_msg.omega = -0.2
+                self.pub_car_cmd.publish(car_control_msg)
+                if 57 not in signs:
+                    self.finalTurn = False
+                    self.stopping = False
+                    car_control_msg = Twist2DStamped()
+                    car_control_msg.v = 0
+                    car_control_msg.omega = 0
+                    self.pub_car_cmd.publish(car_control_msg)
+                    
+                    override_msg = BoolStamped()
+                    #override_msg.header.stamp = joy_msg.header.stamp
+                    override_msg.data = False
+                    #self.log('override_msg = False')
+                    self.pub_joy_override.publish(override_msg)
+            
         if self.FUSION_TYPE == "EKF":
             if self.kalman is None:
                 self.initTags.extend(poses)
@@ -234,10 +368,7 @@ class SensorFusionNode(DTROS):
                 self.last_pose.x = self.kalman.mean[0]
                 self.last_pose.y = self.kalman.mean[1]
                 self.last_pose.theta = self.kalman.mean[2]
-                print(predicted)
-                print(self.kalman.mean)
-                #print(Q)
-                print("-------------------------------------------------")
+                
         
                 self.publishPath()
         else:
@@ -351,9 +482,9 @@ class SensorFusionNode(DTROS):
                         ys = []
                         zs = []
                         for p in range(self.N):
-                            xs.append(-self.particles[p][0] + landm[0])
-                            ys.append(-self.particles[p][1] + landm[1])
-                            zs.append((-self.particles[p][2] + landm[2]) % (2*np.pi))
+                            xs.append(self.particles[p][0] - landm[0])
+                            ys.append(self.particles[p][1] - landm[1])
+                            zs.append((self.particles[p][2] - landm[2]) % (2*np.pi))
                             #if p == 0:
                                 #print(xs)
                                 #print(ys)

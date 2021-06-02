@@ -20,14 +20,10 @@ dt-launchfile-init
 # dt-exec rosrun my_package my_subscriber_node.py
 # dt-exec roslaunch my_package multiple_nodes.launch veh:=$VEHICLE_NAME
 dt-exec roslaunch sensor_fusion_localization sensor_fusion_node.launch veh:=$VEHICLE_NAME
-dt-exec roslaunch my_viz viz_node.launch veh:=$VEHICLE_NAME
+dt-exec roslaunch my_viz viz_node_2.launch veh:=$VEHICLE_NAME
 dt-exec roslaunch my_viz trace_node.launch veh:=$VEHICLE_NAME
-dt-exec roslaunch my_static_tf static_at_tf_publisher1.launch veh:=$VEHICLE_NAME
+dt-exec roslaunch my_static_tf static_at_tf_publisher2.launch veh:=$VEHICLE_NAME
 dt-exec roslaunch my_at_localization my_at_pose_node.launch veh:=$VEHICLE_NAME
-dt-exec roslaunch lane_control lane_controller_node.launch veh:=$VEHICLE_NAME
-dt-exec roslaunch lane_filter lane_filter_node.launch veh:=$VEHICLE_NAME
-dt-exec roslaunch line_detector line_detector_node.launch veh:=$VEHICLE_NAME
-
 #dt-exec roslaunch my_viz viz_node.launch veh:=$VEHICLE_NAME
 
 
