@@ -6,7 +6,7 @@ import rospy
 import tf
 
 from duckietown_msgs.msg import Twist2DStamped, LanePose, Pose2DStamped, BoolStamped
-from sensor_msgs.msg import Joy
+#from sensor_msgs.msg import Joy
 from std_msgs.msg import Int32MultiArray
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped
@@ -81,12 +81,12 @@ class SensorFusionNode(DTROS):
             queue_size=1
         )
         
-        self.pub_joy_override = rospy.Publisher(
+        """self.pub_joy_override = rospy.Publisher(
             str("/" + self.veh_name + "/joy_mapper_node/joystick_override"),
             BoolStamped,
             queue_size=1,
             dt_topic_type=TopicType.CONTROL
-        )
+        )"""
         
         self.pub_car_cmd = rospy.Publisher(
             str("/" + self.veh_name + "/joy_mapper_node/car_cmd"),
@@ -216,8 +216,8 @@ class SensorFusionNode(DTROS):
                 self.translations.append(np.array([tmpx, tmpy, euler[1]]))
                 self.landmarks.append(np.array([translation1[0], translation1[1], euler1[2]]))
                 signs.append(i)
-                #print(i)
-                #print(translation)
+                print(i)
+                print(translation)
                 #print(tmpx)
                 #print(tmpy)
                 #print(poses)
@@ -245,11 +245,11 @@ class SensorFusionNode(DTROS):
                         self.turnLeft = True
                     
                         # stop lane following, set override to True
-                        override_msg = BoolStamped()
-                        override_msg.header.stamp = msg_sensor.header.stamp
-                        override_msg.data = True
+                        #override_msg = BoolStamped()
+                        #override_msg.header.stamp = msg_sensor.header.stamp
+                        #override_msg.data = True
                         #self.log('override_msg = False')
-                        self.pub_joy_override.publish(override_msg)
+                        #self.pub_joy_override.publish(override_msg)
                         
                         #self.joyCmd.buttons[6] = 1
                         #self.pub_joy_cmd.pubish(self.joyCmd)
@@ -341,11 +341,11 @@ class SensorFusionNode(DTROS):
                     car_control_msg.omega = 0
                     self.pub_car_cmd.publish(car_control_msg)
                     
-                    override_msg = BoolStamped()
+                    #override_msg = BoolStamped()
                     #override_msg.header.stamp = joy_msg.header.stamp
-                    override_msg.data = False
+                    #override_msg.data = False
                     #self.log('override_msg = False')
-                    self.pub_joy_override.publish(override_msg)
+                    #self.pub_joy_override.publish(override_msg)
             
         if self.FUSION_TYPE == "EKF":
             if self.kalman is None:
