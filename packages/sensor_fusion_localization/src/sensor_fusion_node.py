@@ -19,6 +19,7 @@ from numpy.linalg import norm
 from numpy.random import randn
 from numpy.random import random
 import scipy.stats
+import random
 
 
 class SensorFusionNode(DTROS):
@@ -94,6 +95,13 @@ class SensorFusionNode(DTROS):
             dt_topic_type=TopicType.CONTROL
         )
         
+        '''self.pub_joy_cmd = rospy.Publisher(
+            str("/" + self.veh_name + "/joy_mapper_node/joy"),
+            Joy,
+            queue_size=1,
+            dt_topic_type=TopicType.CONTROL
+        )'''
+        
         self.pub_pose2 = rospy.Publisher(
             "~pose2",
             PoseStamped,
@@ -157,13 +165,26 @@ class SensorFusionNode(DTROS):
         self.leftMove = False
         self.rightMove = False
         self.finalTurn = False
+        self.goals = []
+        self.drawRand()
+        
+        #self.joyCmd = Joy()
 	
         # ---
         self.log("Initialized.")
-
-    def joy_cb(self, joy_msg):
-        print(joy_msg)
     
+    def drawRand(self):
+        x1 = random.uniform(0.55, 1.14)
+        y1 = 0.15
+        x2 = 1.56
+        y2 = random.uniform(0.55, 1.14)
+        x3 = random.uniform(0.55, 1.14)
+        y3 = 1.56
+        self.goals.append((x1,y1))
+        self.goals.append((x2,y2))
+        self.goals.append((x3,y3))
+        print(self.goals)
+        print("--------------------------")
     
     def sensor_fusion_callback(self, msg_sensor):
         """
@@ -190,24 +211,24 @@ class SensorFusionNode(DTROS):
                 euler1 = euler_from_quaternion([rot1[0], rot1[1], rot1[2], rot1[3]])
                 tmpx = translation[2]*np.cos(-euler1[2]) + translation[0]*np.sin(-euler1[2])
                 tmpy = -translation[2]*np.sin(-euler1[2]) + translation[0]*np.cos(-euler1[2])
-          
-                poses.append(np.array([tmpx + translation1[0], tmpy + translation1[1], euler1[2] + euler[1]]))
+                if i == 11 or i == 32 or i == 26 or i == 61 or i == 33 or i == 31 or i == 10 or i == 24:
+                    poses.append(np.array([tmpx + translation1[0], tmpy + translation1[1], euler1[2] + euler[1]]))
                 self.translations.append(np.array([tmpx, tmpy, euler[1]]))
                 self.landmarks.append(np.array([translation1[0], translation1[1], euler1[2]]))
                 signs.append(i)
-                """print(i)
-                print(translation)
-                print(tmpx)
-                print(tmpy)
-                print(translation1)
-                print("-----------------------------------")"""
+                #print(i)
+                #print(translation)
+                #print(tmpx)
+                #print(tmpy)
+                #print(poses)
+                #print("-----------------------------------")
                               
         except tf_exceptions:
             return
         if not self.stopping:
             for i in range(0, len(signs)):
                 # check if the sign we see is a stop sign
-                if signs[i] == 24 or signs[i] == 25 or signs[i] == 26 or signs[i] ==31 or signs[i] == 32 or signs[i] == 33:
+                if signs[i] == 25:
                     x_dif = self.translations[i][0]
                     y_dif = self.translations[i][1]
                     distance = math.sqrt(x_dif * x_dif + y_dif * y_dif)
@@ -225,10 +246,13 @@ class SensorFusionNode(DTROS):
                     
                         # stop lane following, set override to True
                         override_msg = BoolStamped()
-                        #override_msg.header.stamp = joy_msg.header.stamp
+                        override_msg.header.stamp = msg_sensor.header.stamp
                         override_msg.data = True
                         #self.log('override_msg = False')
                         self.pub_joy_override.publish(override_msg)
+                        
+                        #self.joyCmd.buttons[6] = 1
+                        #self.pub_joy_cmd.pubish(self.joyCmd)
                         
                         car_control_msg = Twist2DStamped()
                         car_control_msg.v = 0
@@ -239,12 +263,12 @@ class SensorFusionNode(DTROS):
             if self.turnLeft:
                 car_control_msg = Twist2DStamped()
                 car_control_msg.v = 0
-                car_control_msg.omega = 0.2
+                car_control_msg.omega = 0.3
                 self.pub_car_cmd.publish(car_control_msg)
                 for i in range(0, len(signs)):
-                    if signs[i] == 65:
+                    if signs[i] == 9:
                         angle_dif = self.translations[i][2] % (2 * np.pi)
-                        if np.abs(angle_dif) < 0.35:
+                        if np.abs(angle_dif) < 0.1:
                             self.turnLeft = False
                             self.leftMove = True
                             car_control_msg = Twist2DStamped()
@@ -258,7 +282,7 @@ class SensorFusionNode(DTROS):
                 car_control_msg.omega = 0
                 self.pub_car_cmd.publish(car_control_msg)
                 for i in range(0, len(signs)):
-                    if signs[i] == 65:
+                    if signs[i] == 9:
                         x_dif = self.translations[i][0]
                         y_dif = self.translations[i][1]
                         distance = math.sqrt(x_dif * x_dif + y_dif * y_dif)
@@ -273,12 +297,12 @@ class SensorFusionNode(DTROS):
             if self.turnRight:
                 car_control_msg = Twist2DStamped()
                 car_control_msg.v = 0
-                car_control_msg.omega = -0.2
+                car_control_msg.omega = -0.3
                 self.pub_car_cmd.publish(car_control_msg)
                 for i in range(0, len(signs)):
                     if signs[i] == 57:
                         angle_dif = self.translations[i][2] % (2 * np.pi)
-                        if np.abs(angle_dif) < 0.35:
+                        if np.abs(angle_dif) < 0.1:
                             self.turnRight = False
                             self.rightMove = True
                             car_control_msg = Twist2DStamped()
@@ -296,7 +320,7 @@ class SensorFusionNode(DTROS):
                         x_dif = self.translations[i][0]
                         y_dif = self.translations[i][1]
                         distance = math.sqrt(x_dif * x_dif + y_dif * y_dif)
-                        if distance < 0.3:
+                        if distance < 0.2:
                             self.rightMove = False
                             self.finalTurn = True
                             car_control_msg = Twist2DStamped()
@@ -307,7 +331,7 @@ class SensorFusionNode(DTROS):
             if self.finalTurn:
                 car_control_msg = Twist2DStamped()
                 car_control_msg.v = 0
-                car_control_msg.omega = -0.2
+                car_control_msg.omega = 0.3
                 self.pub_car_cmd.publish(car_control_msg)
                 if 57 not in signs:
                     self.finalTurn = False
@@ -368,8 +392,20 @@ class SensorFusionNode(DTROS):
                 self.last_pose.x = self.kalman.mean[0]
                 self.last_pose.y = self.kalman.mean[1]
                 self.last_pose.theta = self.kalman.mean[2]
-                
-        
+                if len(self.goals) > 0:
+                    for curX, curY in self.goals:
+                        curDistance = (self.kalman.mean[0] - curX) * (self.kalman.mean[0] - curX) + (self.kalman.mean[1] - curY) * (self.kalman.mean[1] - curY)
+                        curDistance = math.sqrt(curDistance)
+                        if curDistance < 0.3:
+                            car_control_msg = Twist2DStamped()
+                            car_control_msg.v = 0
+                            car_control_msg.omega = 0.3
+                            self.pub_car_cmd.publish(car_control_msg)
+                            print(curX)
+                            print(curY)
+                            print("--------------------")
+                            self.goals.remove((curX, curY))
+                            
                 self.publishPath()
         else:
             return
