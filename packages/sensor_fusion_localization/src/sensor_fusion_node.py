@@ -6,7 +6,7 @@ import rospy
 import tf
 
 from duckietown_msgs.msg import Twist2DStamped, LanePose, Pose2DStamped, BoolStamped
-#from sensor_msgs.msg import Joy
+from sensor_msgs.msg import Joy
 from std_msgs.msg import Int32MultiArray
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped
@@ -80,13 +80,13 @@ class SensorFusionNode(DTROS):
             Path,
             queue_size=1
         )
-        
-        """self.pub_joy_override = rospy.Publisher(
+       
+        self.pub_joy_override = rospy.Publisher(
             str("/" + self.veh_name + "/joy_mapper_node/joystick_override"),
             BoolStamped,
             queue_size=1,
             dt_topic_type=TopicType.CONTROL
-        )"""
+        )
         
         self.pub_car_cmd = rospy.Publisher(
             str("/" + self.veh_name + "/joy_mapper_node/car_cmd"),
@@ -95,12 +95,12 @@ class SensorFusionNode(DTROS):
             dt_topic_type=TopicType.CONTROL
         )
         
-        '''self.pub_joy_cmd = rospy.Publisher(
+        self.pub_joy_cmd = rospy.Publisher(
             str("/" + self.veh_name + "/joy_mapper_node/joy"),
             Joy,
             queue_size=1,
             dt_topic_type=TopicType.CONTROL
-        )'''
+        )
         
         self.pub_pose2 = rospy.Publisher(
             "~pose2",
@@ -168,7 +168,9 @@ class SensorFusionNode(DTROS):
         self.goals = []
         self.drawRand()
         
-        #self.joyCmd = Joy()
+        self.joyCmd = Joy()
+        
+        self.counte = 0
 	
         # ---
         self.log("Initialized.")
@@ -245,14 +247,14 @@ class SensorFusionNode(DTROS):
                         self.turnLeft = True
                     
                         # stop lane following, set override to True
-                        #override_msg = BoolStamped()
-                        #override_msg.header.stamp = msg_sensor.header.stamp
-                        #override_msg.data = True
-                        #self.log('override_msg = False')
-                        #self.pub_joy_override.publish(override_msg)
+                        override_msg = BoolStamped()
+                        override_msg.header.stamp = rospy.Time.now()
+                        override_msg.data = True
+                        self.log('override_msg = False')
+                        self.pub_joy_override.publish(override_msg)
                         
-                        #self.joyCmd.buttons[6] = 1
-                        #self.pub_joy_cmd.pubish(self.joyCmd)
+                        self.joyCmd.buttons[6] = 1
+                        self.pub_joy_cmd.pubish(self.joyCmd)
                         
                         car_control_msg = Twist2DStamped()
                         car_control_msg.v = 0
@@ -263,12 +265,12 @@ class SensorFusionNode(DTROS):
             if self.turnLeft:
                 car_control_msg = Twist2DStamped()
                 car_control_msg.v = 0
-                car_control_msg.omega = 0.3
+                car_control_msg.omega = 1.5
                 self.pub_car_cmd.publish(car_control_msg)
                 for i in range(0, len(signs)):
                     if signs[i] == 9:
-                        angle_dif = self.translations[i][2] % (2 * np.pi)
-                        if np.abs(angle_dif) < 0.1:
+                        angle_dif = np.abs(self.translations[i][2]) % (2 * np.pi)
+                        if angle_dif < 0.1:
                             self.turnLeft = False
                             self.leftMove = True
                             car_control_msg = Twist2DStamped()
@@ -278,8 +280,8 @@ class SensorFusionNode(DTROS):
             
             if self.leftMove:
                 car_control_msg = Twist2DStamped()
-                car_control_msg.v = 0.2
-                car_control_msg.omega = 0
+                car_control_msg.v = 0.1
+                car_control_msg.omega = -0.1
                 self.pub_car_cmd.publish(car_control_msg)
                 for i in range(0, len(signs)):
                     if signs[i] == 9:
@@ -297,12 +299,12 @@ class SensorFusionNode(DTROS):
             if self.turnRight:
                 car_control_msg = Twist2DStamped()
                 car_control_msg.v = 0
-                car_control_msg.omega = -0.3
+                car_control_msg.omega = -1.8
                 self.pub_car_cmd.publish(car_control_msg)
                 for i in range(0, len(signs)):
                     if signs[i] == 57:
-                        angle_dif = self.translations[i][2] % (2 * np.pi)
-                        if np.abs(angle_dif) < 0.1:
+                        angle_dif = np.abs(self.translations[i][2]) % (2 * np.pi)
+                        if angle_dif < 0.1:
                             self.turnRight = False
                             self.rightMove = True
                             car_control_msg = Twist2DStamped()
@@ -312,15 +314,15 @@ class SensorFusionNode(DTROS):
                             
             if self.rightMove:
                 car_control_msg = Twist2DStamped()
-                car_control_msg.v = 0.2
-                car_control_msg.omega = 0
+                car_control_msg.v = 0.1
+                car_control_msg.omega = -0.1
                 self.pub_car_cmd.publish(car_control_msg)
                 for i in range(0, len(signs)):
                     if signs[i] == 57:
                         x_dif = self.translations[i][0]
                         y_dif = self.translations[i][1]
                         distance = math.sqrt(x_dif * x_dif + y_dif * y_dif)
-                        if distance < 0.2:
+                        if distance < 0.3:
                             self.rightMove = False
                             self.finalTurn = True
                             car_control_msg = Twist2DStamped()
@@ -331,7 +333,7 @@ class SensorFusionNode(DTROS):
             if self.finalTurn:
                 car_control_msg = Twist2DStamped()
                 car_control_msg.v = 0
-                car_control_msg.omega = 0.3
+                car_control_msg.omega = 1.5
                 self.pub_car_cmd.publish(car_control_msg)
                 if 57 not in signs:
                     self.finalTurn = False
@@ -341,11 +343,11 @@ class SensorFusionNode(DTROS):
                     car_control_msg.omega = 0
                     self.pub_car_cmd.publish(car_control_msg)
                     
-                    #override_msg = BoolStamped()
-                    #override_msg.header.stamp = joy_msg.header.stamp
-                    #override_msg.data = False
-                    #self.log('override_msg = False')
-                    #self.pub_joy_override.publish(override_msg)
+                    override_msg = BoolStamped()
+                    override_msg.header.stamp = rospy.Time.now()
+                    override_msg.data = False
+                    self.log('override_msg = False')
+                    self.pub_joy_override.publish(override_msg)
             
         if self.FUSION_TYPE == "EKF":
             if self.kalman is None:
@@ -397,14 +399,30 @@ class SensorFusionNode(DTROS):
                         curDistance = (self.kalman.mean[0] - curX) * (self.kalman.mean[0] - curX) + (self.kalman.mean[1] - curY) * (self.kalman.mean[1] - curY)
                         curDistance = math.sqrt(curDistance)
                         if curDistance < 0.3:
+                            override_msg = BoolStamped()
+                            override_msg.header.stamp = rospy.Time.now()
+                            override_msg.data = True
+                            self.log('override_msg = False')
+                            self.pub_joy_override.publish(override_msg)
+                        
+                            self.joyCmd.buttons[6] = 1
+                            self.pub_joy_cmd.pubish(self.joyCmd)
                             car_control_msg = Twist2DStamped()
                             car_control_msg.v = 0
-                            car_control_msg.omega = 0.3
+                            car_control_msg.omega = 0
                             self.pub_car_cmd.publish(car_control_msg)
+                            self.counte = self.counte + 1
                             print(curX)
                             print(curY)
                             print("--------------------")
-                            self.goals.remove((curX, curY))
+                            if self.counte > 20:
+                                self.goals.remove((curX, curY))
+                                self.counte = 0
+                                override_msg = BoolStamped()
+                                override_msg.header.stamp = rospy.Time.now()
+                                override_msg.data = False
+                                self.log('override_msg = False')
+                                self.pub_joy_override.publish(override_msg)
                             
                 self.publishPath()
         else:
