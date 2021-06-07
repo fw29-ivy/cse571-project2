@@ -258,8 +258,8 @@ class SensorFusionNode(DTROS):
         if self.stopping:
             if self.turnLeft:
                 car_control_msg = Twist2DStamped()
-                car_control_msg.v = 0.05
-                car_control_msg.omega = 2.5
+                car_control_msg.v = 0.1
+                car_control_msg.omega = 3.5
                 self.pub_car_cmd.publish(car_control_msg)
                 for i in range(0, len(signs)):
                     if signs[i] == 9:
@@ -274,7 +274,7 @@ class SensorFusionNode(DTROS):
             
             if self.leftMove:
                 car_control_msg = Twist2DStamped()
-                car_control_msg.v = 0.15
+                car_control_msg.v = 0.2
                 car_control_msg.omega = 0
                 self.pub_car_cmd.publish(car_control_msg)
                 for i in range(0, len(signs)):
@@ -293,8 +293,8 @@ class SensorFusionNode(DTROS):
                            
             if self.turnRight:
                 car_control_msg = Twist2DStamped()
-                car_control_msg.v = 0.05
-                car_control_msg.omega = -2.5
+                car_control_msg.v = 0.1
+                car_control_msg.omega = -3
                 self.pub_car_cmd.publish(car_control_msg)
                 for i in range(0, len(signs)):
                     if signs[i] == 57:
@@ -309,7 +309,7 @@ class SensorFusionNode(DTROS):
                             
             if self.rightMove:
                 car_control_msg = Twist2DStamped()
-                car_control_msg.v = 0.15
+                car_control_msg.v = 0.2
                 car_control_msg.omega = 0
                 self.pub_car_cmd.publish(car_control_msg)
                 for i in range(0, len(signs)):
@@ -328,8 +328,8 @@ class SensorFusionNode(DTROS):
                             
             if self.finalTurn:
                 car_control_msg = Twist2DStamped()
-                car_control_msg.v = 0.05
-                car_control_msg.omega = 4
+                car_control_msg.v = 0.1
+                car_control_msg.omega = 4.5
                 self.pub_car_cmd.publish(car_control_msg)
                 if 57 not in signs:
                     self.finalTurn = False
